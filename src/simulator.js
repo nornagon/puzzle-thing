@@ -218,7 +218,7 @@ Simulator = (function() {
           cell = this.grid[k];
           if (e.grid[k] || (cell === 'nothing' || cell === 'thinshuttle' || cell === 'thinsolid')) {
             pressure[`${x},${y}`] = ((ref1 = pressure[`${x},${y}`]) != null ? ref1 : 0) + e.pressure;
-// Propogate pressure through bridges
+            // Propogate pressure through bridges
             for (j = 0, len1 = cardinal_dirs.length; j < len1; j++) {
               [dx, dy] = cardinal_dirs[j];
               _x = x + dx;

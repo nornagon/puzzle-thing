@@ -4,15 +4,45 @@
     <meta charset="UTF-8">
     <title>Steamclank</title>
 <style>
-#ui {
-  pointer-events: none;
+html, body { height: 100%; margin: 0; }
+#main {
+  display: grid;
+  grid-template-rows: 1fr 100px;
+  grid-template-columns: 50px 1fr;
+  width: 100%;
+  height: 100%;
 }
-#ui > * {
-  pointer-events: initial;
+#board canvas {
+  width: 100%;
+  height: 100%;
+  background: #09191B;
+}
+* {
+  user-select: none;
 }
 </style>
   </head>
   <body>
+<div id="main">
+  <div id="palette">
+    <button data-paint='nothing'>empty</button>
+    <button data-paint='solid'>solid</button>
+    <button data-paint='positive'>positive</button>
+    <button data-paint='negative'>negative</button>
+    <button data-paint='shuttle'>shuttle</button>
+    <button data-paint='thinshuttle'>thinshuttle</button>
+  </div>
+  <div id="board">
+    <canvas />
+  </div>
+  <div id="controls">
+    <button id=play>play</button>
+    <button id=step>step</button>
+    <button id=stop>stop</button>
+  </div>
+  <div id="io">
+  </div>
+</div>
   </body>
 
   <script>
