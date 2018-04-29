@@ -9,6 +9,12 @@ type Input = {
   signal: Array<number>;
 }
 
+type Output = {
+  label: string;
+  position: { x: number; y: number; };
+  requiredSignal: Array<number | undefined>;
+}
+
 const sim = new Simulator({
   '1,2': 'positive',
   '1,3': 'nothing',
@@ -41,10 +47,13 @@ const bounds = { width: 8, height: 8 };
 const forbidden = new Set();
 
 const inputs: Array<Input> = [];
+const outputs: Array<Output> = [];
 
 let running = false;
 let initial = '';
 let timeIndex = 0;
+let correct = true;
+let recordedOuts: { [label: string]: Array<number>; } = {}
 
 const colors: { [t: string]: string } = {
   bridge: '#2E96D6',
@@ -87,26 +96,38 @@ const draw = () => {
     }
   }
   ctx.save()
+  ctx.fillStyle = 'black'
+  ctx.textBaseline = 'top'
+  ctx.strokeStyle = 'white'
+  ctx.lineWidth = 2
+  ctx.lineJoin = 'bevel'
   inputs.forEach(inp => {
     const {x, y} = inp.position
     const {px, py} = worldToScreen(x, y)
-    ctx.fillStyle = 'black'
-    ctx.textBaseline = 'top'
-    ctx.strokeStyle = 'white'
-    ctx.lineWidth = 2
-    ctx.lineJoin = 'bevel'
     ctx.strokeText(inp.label, px, py)
     ctx.fillText(inp.label, px, py)
   });
+  outputs.forEach(out => {
+    const {x, y} = out.position
+    const {px, py} = worldToScreen(x, y)
+    ctx.strokeText(out.label, px, py)
+    ctx.fillText(out.label, px, py)
+  })
   ctx.restore()
 
   ioCanvas.width = ioCanvas.getBoundingClientRect().width * devicePixelRatio
-  ioCanvas.height = (18 * inputs.length + 2) * devicePixelRatio
+  ioCanvas.height = (18 * (inputs.length + outputs.length) + 2) * devicePixelRatio
   const ioCtx = ioCanvas.getContext('2d')
   ioCtx.scale(devicePixelRatio, devicePixelRatio)
+  ioCtx.fillStyle = 'black';
+  ioCtx.fillRect(0, 0, ioCtx.canvas.width, ioCtx.canvas.height)
   ioCtx.save()
   inputs.forEach(inp => {
     drawInput(inp, ioCtx)
+    ioCtx.translate(0, 18)
+  })
+  outputs.forEach(out => {
+    drawOutput(out, ioCtx)
     ioCtx.translate(0, 18)
   })
   ioCtx.restore()
@@ -124,12 +145,11 @@ const draw = () => {
 }
 
 function drawInput(input: Input, ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = 'black';
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-
   ctx.save()
+  ctx.lineJoin = 'bevel'
   ctx.textBaseline = 'top'
   ctx.strokeStyle = 'white'
+  ctx.lineWidth = 2
   ctx.strokeText(input.label, 4, 1)
   ctx.fillText(input.label, 4, 1)
   ctx.restore()
@@ -148,6 +168,54 @@ function drawInput(input: Input, ctx: CanvasRenderingContext2D) {
     const v = input.signal[t]
     ctx.lineTo(t * stepSize, y + pHeight * v)
     ctx.lineTo((t + 1) * stepSize, y + pHeight * v)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawOutput(output: Output, ctx: CanvasRenderingContext2D) {
+  ctx.save()
+  ctx.lineJoin = 'bevel'
+  ctx.textBaseline = 'top'
+  ctx.strokeStyle = 'white'
+  ctx.lineWidth = 2
+  ctx.strokeText(output.label, 4, 1)
+  ctx.fillText(output.label, 4, 1)
+  ctx.restore()
+
+  const stepSize = 8
+
+  const y = 8
+  const pHeight = -8
+
+  const recorded = recordedOuts[output.label] || []
+  ctx.save()
+  ctx.translate(16, 1)
+  ctx.strokeStyle = 'gray'
+  ctx.beginPath()
+  ctx.moveTo(0, y + pHeight * recorded[0])
+  for (let t = 0; t < recorded.length; t++) {
+    const v = recorded[t]
+    ctx.lineTo(t * stepSize, y + pHeight * v)
+    ctx.lineTo((t + 1) * stepSize, y + pHeight * v)
+  }
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(16, 1)
+  ctx.strokeStyle = 'white'
+  ctx.beginPath()
+  ctx.moveTo(0, y + pHeight * output.requiredSignal[0])
+  for (let t = 0; t < output.requiredSignal.length; t++) {
+    const v = output.requiredSignal[t]
+    if (v != undefined) {
+      if (t > 0 && output.requiredSignal[t-1] == undefined)
+        ctx.moveTo(t * stepSize, y + pHeight * v)
+      else
+        ctx.lineTo(t * stepSize, y + pHeight * v)
+      ctx.lineTo((t + 1) * stepSize, y + pHeight * v)
+    }
   }
   ctx.stroke()
   ctx.restore()
@@ -186,6 +254,18 @@ function step() {
       sim.set(i.position.x, i.position.y, 'nothing')
     }
   }
+  const pressure = sim.getPressure();
+  for (let i of outputs) {
+    const p = pressure[`${i.position.x},${i.position.y}`] || 0
+    if (!(i.label in recordedOuts)) recordedOuts[i.label] = []
+    recordedOuts[i.label].push(p)
+    const s = i.requiredSignal[timeIndex];
+    if (s !== undefined) {
+      if (Math.sign(p) !== Math.sign(s)) {
+        correct = false;
+      }
+    }
+  }
   timeIndex += 1;
   draw()
 }
@@ -195,6 +275,8 @@ function reset() {
     return;
   running = false;
   timeIndex = 0;
+  correct = true;
+  recordedOuts = {};
   sim.setGrid(JSON.parse(initial));
   draw();
 }
@@ -204,18 +286,24 @@ type PuzzleDef = {
   width: number;
   height: number;
   grid: { [k: string]: string };
-  letterDefs: { [k: string]: Input };
+  letterDefs: { [k: string]: Input | Output };
 };
 
 function loadPuzzle(puzzleDef: PuzzleDef) {
   const grid: {[k: string]: string} = {};
   forbidden.clear();
   inputs.length = 0;
+  outputs.length = 0;
   for (let k in puzzleDef.grid) {
     const v = puzzleDef.grid[k];
-    const inp = puzzleDef.letterDefs[v];
-    grid[k] = inp.signal[0] < 0 ? 'negative' : inp.signal[0] > 0 ? 'positive' : 'nothing';
-    inputs.push(inp);
+    const def = puzzleDef.letterDefs[v];
+    if ('signal' in def) {
+      grid[k] = def.signal[0] < 0 ? 'negative' : def.signal[0] > 0 ? 'positive' : 'nothing';
+      inputs.push(def);
+    } else if ('requiredSignal' in def) {
+      grid[k] = 'thinsolid';
+      outputs.push(def);
+    }
     forbidden.add(k);
   }
   bounds.width = puzzleDef.width
@@ -223,6 +311,7 @@ function loadPuzzle(puzzleDef: PuzzleDef) {
   sim.setGrid(grid);
 }
 
+const _: undefined = undefined
 loadPuzzle({
   name: 'and',
   width: 6,
@@ -230,7 +319,7 @@ loadPuzzle({
   grid: {
     '1,1': 'A',
     '1,4': 'B',
-    //'4,1': 'n',
+    '4,1': 'C',
   },
   letterDefs: {
     'A': {
@@ -243,7 +332,11 @@ loadPuzzle({
       signal: [0,0,0,0,1,1,0,0,0,0,1,1,0,0,0],
       label: 'B',
     },
-    //'n': 'negative',
+    'C': {
+      position: {x: 4, y: 1},
+      requiredSignal: [_,_,_,0,_,_,0,_,_,_,1,_,_,_,0],
+      label: 'C',
+    }
   }
 });
 
