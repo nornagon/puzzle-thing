@@ -50,6 +50,7 @@ const inputs: Array<Input> = [];
 const outputs: Array<Output> = [];
 
 let running = false;
+let finished = false;
 let initial = '';
 let timeIndex = 0;
 let correct = true;
@@ -186,18 +187,23 @@ function drawOutput(output: Output, ctx: CanvasRenderingContext2D) {
   const stepSize = 8
 
   const y = 8
-  const pHeight = -8
+  const pHeight = 8
 
   const recorded = recordedOuts[output.label] || []
   ctx.save()
   ctx.translate(16, 1)
   ctx.strokeStyle = 'gray'
   ctx.beginPath()
-  ctx.moveTo(0, y + pHeight * recorded[0])
+  ctx.moveTo(0, y + pHeight * -recorded[0])
   for (let t = 0; t < recorded.length; t++) {
     const v = recorded[t]
-    ctx.lineTo(t * stepSize, y + pHeight * v)
-    ctx.lineTo((t + 1) * stepSize, y + pHeight * v)
+    ctx.lineTo(t * stepSize, y + pHeight * -v)
+    ctx.lineTo((t + 1) * stepSize, y + pHeight * -v)
+    const req = output.requiredSignal[t]
+    if (req != undefined && Math.sign(req) !== Math.sign(v)) {
+      ctx.fillStyle = 'red'
+      ctx.fillRect(t * stepSize, y - pHeight, stepSize, pHeight * 2)
+    }
   }
   ctx.stroke()
   ctx.restore()
@@ -206,15 +212,15 @@ function drawOutput(output: Output, ctx: CanvasRenderingContext2D) {
   ctx.translate(16, 1)
   ctx.strokeStyle = 'white'
   ctx.beginPath()
-  ctx.moveTo(0, y + pHeight * output.requiredSignal[0])
+  ctx.moveTo(0, y + pHeight * -output.requiredSignal[0])
   for (let t = 0; t < output.requiredSignal.length; t++) {
     const v = output.requiredSignal[t]
     if (v != undefined) {
       if (t > 0 && output.requiredSignal[t-1] == undefined)
-        ctx.moveTo(t * stepSize, y + pHeight * v)
+        ctx.moveTo(t * stepSize, y + pHeight * -v)
       else
-        ctx.lineTo(t * stepSize, y + pHeight * v)
-      ctx.lineTo((t + 1) * stepSize, y + pHeight * v)
+        ctx.lineTo(t * stepSize, y + pHeight * -v)
+      ctx.lineTo((t + 1) * stepSize, y + pHeight * -v)
     }
   }
   ctx.stroke()
@@ -243,6 +249,9 @@ function step() {
     running = true;
     initial = JSON.stringify(sim.grid);
   }
+  if (finished) {
+    return;
+  }
   sim.step()
   for (let i of inputs) {
     const s = i.signal[timeIndex];
@@ -267,12 +276,22 @@ function step() {
     }
   }
   timeIndex += 1;
+  const end = Math.max.apply(Math, inputs.map(i => i.signal.length).concat(outputs.map(o => o.requiredSignal.length)))
+  if (timeIndex === end) {
+    finished = true;
+    if (correct) {
+      alert('you did it!')
+    } else {
+      alert('try again')
+    }
+  }
   draw()
 }
 
 function reset() {
   if (!running)
     return;
+  finished = false;
   running = false;
   timeIndex = 0;
   correct = true;
