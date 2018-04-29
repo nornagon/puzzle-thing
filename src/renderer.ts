@@ -314,27 +314,27 @@ function loadPuzzle(puzzleDef: PuzzleDef) {
 const _: undefined = undefined
 loadPuzzle({
   name: 'and',
-  width: 6,
-  height: 6,
+  width: 8,
+  height: 8,
   grid: {
     '1,1': 'A',
-    '1,4': 'B',
-    '4,1': 'C',
+    '1,6': 'B',
+    '6,1': 'C',
   },
   letterDefs: {
     'A': {
       position: {x: 1, y: 1},
-      signal: [0,1,1,0,0,0,0,1,1,0,0,0,-1,0,0],
+      signal: [0,0,1,1,1,0,0,0,1,1,1,0,0,0],
       label: 'A',
     },
     'B': {
-      position: {x: 1, y: 4},
-      signal: [0,0,0,0,1,1,0,0,0,0,1,1,0,0,0],
+      position: {x: 1, y: 6},
+      signal: [0,0,0,0,0,0,0,0,1,1,1,1,1,1],
       label: 'B',
     },
     'C': {
-      position: {x: 4, y: 1},
-      requiredSignal: [_,_,_,0,_,_,0,_,_,_,1,_,_,_,0],
+      position: {x: 6, y: 1},
+      requiredSignal: [_,_,_,_,0,_,_,0,_,_,1,_,_,0],
       label: 'C',
     }
   }
