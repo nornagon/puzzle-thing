@@ -30,6 +30,7 @@ const ioCanvas: HTMLCanvasElement = document.querySelector('#io canvas')
 
 ;(document.querySelector('#controls #step') as HTMLButtonElement).onclick = step
 ;(document.querySelector('#controls #stop') as HTMLButtonElement).onclick = reset
+;(document.querySelector('#controls #play') as HTMLButtonElement).onclick = play
 
 let brush = 'nothing'
 
@@ -55,6 +56,8 @@ let initial = '';
 let timeIndex = 0;
 let correct = true;
 let recordedOuts: { [label: string]: Array<number>; } = {}
+
+let playingTimer: number = 0
 
 const colors: { [t: string]: string } = {
   bridge: '#2E96D6',
@@ -277,20 +280,34 @@ function step() {
   }
   timeIndex += 1;
   const end = Math.max.apply(Math, inputs.map(i => i.signal.length).concat(outputs.map(o => o.requiredSignal.length)))
+  draw()
   if (timeIndex === end) {
     finished = true;
     if (correct) {
-      alert('you did it!')
+      setTimeout(() => alert('you did it!'))
     } else {
-      alert('try again')
+      setTimeout(() => alert('try again'))
     }
   }
-  draw()
+}
+
+function play() {
+  if (playingTimer) {
+    clearInterval(playingTimer)
+    playingTimer = 0
+    return
+  }
+  playingTimer = window.setInterval(step, 250)
+  step()
 }
 
 function reset() {
   if (!running)
     return;
+  if (playingTimer) {
+    clearInterval(playingTimer);
+    playingTimer = 0;
+  }
   finished = false;
   running = false;
   timeIndex = 0;
