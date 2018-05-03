@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Steamclank</title>
+<style>
+html, body { height: 100%; margin: 0; }
+.puzzling iframe, .puzzling webview {
+  border: 0; margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: white;
+  width: 100%;
+  height: 100%;
+}
+</style>
+  </head>
+  <body>
+<div id="puzzle-list">
+</div>
+  </body>
+
+  <script>
+    require('./dist/puzzle-list.js')
+  </script>
+</html>

@@ -6,6 +6,10 @@
   version "8.10.10"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-8.10.10.tgz#fec07bc2ad549d9e6d2f7aa0fb0be3491b83163a"
 
+"@types/parsimmon@^1.6.1":
+  version "1.6.1"
+  resolved "https://registry.yarnpkg.com/@types/parsimmon/-/parsimmon-1.6.1.tgz#c5d849baf59820389d03564ec4b0bea5900e64cb"
+
 ajv@^5.1.0:
   version "5.5.2"
   resolved "https://registry.yarnpkg.com/ajv/-/ajv-5.5.2.tgz#73b5eeca3fab653e3d3f9422b341ad42205dc965"
@@ -639,6 +643,10 @@ parse-json@^2.2.0:
   resolved "https://registry.yarnpkg.com/parse-json/-/parse-json-2.2.0.tgz#f480f40434ef80741f8469099f8dea18f55a4dc9"
   dependencies:
     error-ex "^1.2.0"
+
+parsimmon@^1.7.3:
+  version "1.7.3"
+  resolved "https://registry.yarnpkg.com/parsimmon/-/parsimmon-1.7.3.tgz#3e8a9ae1f651077c4f6dcf9b3ade1f9e60d085df"
 
 path-exists@^2.0.0, path-exists@^2.1.0:
   version "2.1.0"

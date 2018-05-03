@@ -2,6 +2,14 @@
 // be executed in the renderer process for that window.
 // All of the Node.js APIs are available in this process.
 import * as Simulator from "./simulator";
+import {ipcRenderer} from "electron";
+ipcRenderer.on('puzzle', (e: any, msg: string) => {
+  const puzzle = JSON.parse(msg)
+  console.log(puzzle)
+  loadPuzzle(puzzle)
+  draw()
+  ipcRenderer.sendToHost('puzzle-loaded')
+})
 
 type Input = {
   label: string;
@@ -31,6 +39,9 @@ const ioCanvas: HTMLCanvasElement = document.querySelector('#io canvas')
 ;(document.querySelector('#controls #step') as HTMLButtonElement).onclick = step
 ;(document.querySelector('#controls #stop') as HTMLButtonElement).onclick = reset
 ;(document.querySelector('#controls #play') as HTMLButtonElement).onclick = play
+;(document.querySelector('#controls #back') as HTMLButtonElement).onclick = () => {
+  window.close()
+}
 
 let brush = 'nothing'
 
@@ -263,7 +274,7 @@ function step() {
     } else if (s < 0) {
       sim.set(i.position.x, i.position.y, 'negative')
     } else {
-      sim.set(i.position.x, i.position.y, 'nothing')
+      sim.set(i.position.x, i.position.y, 'thinsolid')
     }
   }
   const pressure = sim.getPressure();
@@ -317,12 +328,13 @@ function reset() {
   draw();
 }
 
+type PuzzleLetterDef =
+  "solid" | "open" | {in: string} | {out: string};
 type PuzzleDef = {
   name: string;
-  width: number;
-  height: number;
-  grid: { [k: string]: string };
-  letterDefs: { [k: string]: Input | Output };
+  dimensions: [number, number];
+  grid: [string];
+  defns: [[string, PuzzleLetterDef]];
 };
 
 function loadPuzzle(puzzleDef: PuzzleDef) {
@@ -330,50 +342,44 @@ function loadPuzzle(puzzleDef: PuzzleDef) {
   forbidden.clear();
   inputs.length = 0;
   outputs.length = 0;
-  for (let k in puzzleDef.grid) {
-    const v = puzzleDef.grid[k];
-    const def = puzzleDef.letterDefs[v];
-    if ('signal' in def) {
-      grid[k] = def.signal[0] < 0 ? 'negative' : def.signal[0] > 0 ? 'positive' : 'nothing';
-      inputs.push(def);
-    } else if ('requiredSignal' in def) {
-      grid[k] = 'thinsolid';
-      outputs.push(def);
-    }
-    forbidden.add(k);
+  const defnsByChar: { [c: string]: PuzzleLetterDef } = {}
+  for (let [letter, def] of puzzleDef.defns) {
+    defnsByChar[letter] = def;
   }
-  bounds.width = puzzleDef.width
-  bounds.height = puzzleDef.height
+  for (let y in puzzleDef.grid) {
+    const line = puzzleDef.grid[y];
+    for (let x in (line as any)) {
+      const c = line[Number(x)];
+      if (c !== ' ') {
+        const k = `${x},${y}`
+        const def = defnsByChar[c];
+        if (!def) debugger;
+        if (typeof def === 'string') {
+          grid[k] = def
+        } else {
+          if ('in' in def) {
+            const signal = def.in.split('').map(x => x === '0' ? 0 : x === '+' ? 1 : x === '-' ? -1 : undefined)
+            grid[k] = signal[0] < 0 ? 'negative' : signal[0] > 0 ? 'positive' : 'thinsolid';
+            inputs.push({
+              label: c,
+              position: {x: Number(x), y: Number(y)},
+              signal,
+            })
+          } else if ('out' in def) {
+            const requiredSignal = def.out.split('').map(x => x === '0' ? 0 : x === '+' ? 1 : x === '-' ? -1 : undefined)
+            grid[k] = 'thinsolid';
+            outputs.push({
+              label: c,
+              position: {x: Number(x), y: Number(y)},
+              requiredSignal,
+            })
+          }
+        }
+        forbidden.add(k);
+      }
+    }
+  }
+  bounds.width = puzzleDef.dimensions[0]
+  bounds.height = puzzleDef.dimensions[1]
   sim.setGrid(grid);
 }
-
-const _: undefined = undefined
-loadPuzzle({
-  name: 'and',
-  width: 8,
-  height: 8,
-  grid: {
-    '1,1': 'A',
-    '1,6': 'B',
-    '6,1': 'C',
-  },
-  letterDefs: {
-    'A': {
-      position: {x: 1, y: 1},
-      signal: [0,0,1,1,1,0,0,0,1,1,1,0,0,0],
-      label: 'A',
-    },
-    'B': {
-      position: {x: 1, y: 6},
-      signal: [0,0,0,0,0,0,0,0,1,1,1,1,1,1],
-      label: 'B',
-    },
-    'C': {
-      position: {x: 6, y: 1},
-      requiredSignal: [_,_,_,_,0,_,_,0,_,_,1,_,_,0],
-      label: 'C',
-    }
-  }
-});
-
-draw()
