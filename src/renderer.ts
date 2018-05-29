@@ -11,6 +11,27 @@ ipcRenderer.on('puzzle', (e: any, msg: string) => {
   ipcRenderer.sendToHost('puzzle-loaded')
 })
 
+const spriteCache: { [name: string]: HTMLImageElement } = {}
+const sprite = (name: string) => {
+  if (!(name in spriteCache)) {
+    const img = new Image
+    img.src = `assets/${name}.png`
+    spriteCache[name] = img
+  }
+  return spriteCache[name];
+}
+
+const preload = () => {
+  sprite('back')
+  for (let i = 0; i < 15; i++) {
+    let b = i.toString(2)
+    while (b.length < 4) b = '0' + b
+    sprite('base_' + b)
+    sprite('top_' + b)
+  }
+}
+preload()
+
 type Input = {
   label: string;
   position: { x: number; y: number; };
@@ -53,7 +74,8 @@ Array.prototype.forEach.call(document.querySelectorAll('#palette button'), (e: H
 
 const ctx = canvas.getContext('2d')
 ctx.scale(devicePixelRatio, devicePixelRatio)
-const size = 16;
+const tileW = 50;
+const tileH = 40;
 
 const bounds = { width: 8, height: 8 };
 const forbidden = new Set();
@@ -84,32 +106,136 @@ const colors: { [t: string]: string } = {
 
 const draw = () => {
   const worldToScreen = (tx: number, ty: number) => ({
-    px: tx * size,
-    py: ty * size
+    px: tx * tileW,
+    py: ty * tileH
   });
 
-  ctx.fillStyle = '#d6ae3e';
+  const pattern = ctx.createPattern(sprite('top_0000'), "repeat")
+  ctx.fillStyle = pattern;
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.fillStyle = colors.solid
   const origin = worldToScreen(0, 0)
   const boundEdge = worldToScreen(bounds.width, bounds.height)
-  ctx.fillRect(origin.px, origin.py, boundEdge.px, boundEdge.py)
+  //ctx.fillRect(origin.px, origin.py, boundEdge.px, boundEdge.py)
 
   const pressure = sim.getPressure();
-  for (let k in sim.grid) {
-    const { x: tx, y: ty } = Simulator.parseXY(k);
-    const {px, py} = worldToScreen(tx, ty);
-    const v = sim.grid[k];
-    if (v !== 'solid') {
-      ctx.fillStyle = colors[v];
-      ctx.fillRect(px, py, size, size);
-    }
-    const p = pressure[k] || 0
-    if (p !== 0) {
-      ctx.fillStyle = p < 0 ? 'rgba(255,0,0,0.2)' : 'rgba(0,255,0,0.15)';
-      ctx.fillRect(px, py, size, size)
+  // vertices are every corner of an non-solid tile that borders on a solid
+  // tile.
+  // edges are along every border between solid and non-solid.
+  // bfs until nothing is left.
+  // that doesn't work for x shapes:
+  //
+  //   s.
+  //   .s
+  //
+  // where s is solid, . is empty.
+  // 
+  // so, need a boundary-tracing algorithm.
+  // 1. find an untraced cell, which is defined as either a non-solid cell or
+  //    the cell immediately below a non-solid cell.
+  // 2. start at its top-left corner, facing right
+  // 3. proceed forwards until the next cell on your left isn't solid or the
+  //    next cell on your right is
+  // 4. if the cell on your right is solid, turn right. otherwise turn left.
+  // 5. continue until you reach the original location.
+  // 6. mark all edges on the path as traced.
+  
+  const traced = new Set()
+  const findUntraced = () => {
+    for (let ty = 0; ty < bounds.height; ty++) {
+      for (let tx = 0; tx < bounds.width; tx++) {
+        const k = `${tx},${ty}`
+        if (!traced.has(k) && (sim.grid[k] === 'nothing' || sim.grid[`${tx},${ty-1}`] === 'nothing')) {
+          return {tx, ty}
+        }
+      }
     }
   }
+  const traceFrom = (tx: number, ty: number) => {
+    let p = {tx, ty}
+    let dir = {dx: 1, dy: 0}
+    const path = [p]
+    do {
+      // TODO: this is wrong when traveling left
+      const nextRight = sim.grid[`${p.tx+dir.dx},${p.ty+dir.dy}`] || 'solid'
+      const nextLeft = sim.grid[`${p.tx+dir.dx+dir.dy},${p.ty+dir.dy-dir.dx}`] || 'solid' // TODO: get a bit of paper and check this
+      p = {tx: p.tx + dir.dx, ty: p.ty + dir.dy};
+      path.push(p)
+      if (nextLeft !== 'solid' || nextRight === 'solid') {
+        if (nextRight === 'solid') {
+          // turn right
+          dir = {dx: -dir.dy, dy: dir.dx}
+        } else {
+          // turn left
+          dir = {dx: dir.dy, dy: -dir.dx} // TODO: lol idk some math shit
+        }
+      }
+    } while (!(p.tx === tx && p.ty === ty))
+    return path
+  }
+  const check = traceFrom(1, 1)
+  ctx.save()
+  ctx.strokeStyle = 'magenta'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(check[0].tx * tileW, check[0].ty * tileH)
+  check.slice(1).forEach(({tx, ty}) => ctx.lineTo(tx * tileW, ty * tileH))
+  ctx.stroke()
+  ctx.restore()
+
+  // bottom layer
+  for (let ty = 0; ty < bounds.height; ty++) {
+    for (let tx = 0; tx < bounds.width; tx++) {
+      const k = `${tx},${ty}`
+      const {px, py} = worldToScreen(tx, ty);
+      const v = sim.grid[k] || 'solid';
+      switch (v) {
+        case 'solid': {
+          // if the tile to the left isn't solid, base_0011
+          // if the tile to the right isn't solid, base_0110
+          // if neither left or right is solid, base_0111
+          // if both are solid, base_0000
+          /*
+          const l = sim.grid[`${tx-1},${ty}`] || 'solid'
+          const r = sim.grid[`${tx+1},${ty}`] || 'solid'
+          let sId
+          if (l === 'solid' && r === 'solid') {
+            sId = 'base_0000'
+          } else if (l === 'solid' && r !== 'solid') {
+            sId = 'base_0110'
+          } else if (l !== 'solid' && r === 'solid') {
+            sId = 'base_0011'
+          } else {
+            sId = 'base_0111'
+          }
+          ctx.drawImage(sprite(sId), px, py, tileW, tileH)
+           */
+        } break;
+          /*
+        case 'nothing':
+          ctx.drawImage(sprite('back'), px, py, tileW, tileH)
+          break;
+        default:
+          ctx.fillStyle = colors[v]
+          ctx.fillRect(px, py, tileW, tileH)
+          break;
+           */
+      }
+    }
+  }
+  // top layer
+  /*
+  for (let ty = 0; ty < bounds.height; ty++) {
+    for (let tx = 0; tx < bounds.width; tx++) {
+      const k = `${tx},${ty}`
+      const v = sim.grid[k]
+      const {px, py} = worldToScreen(tx, ty)
+      if (!v || v === 'solid') {
+        ctx.drawImage(sprite('top_0000'), px, py - (tileH*0.75)/2, tileW, tileH)
+      }
+    }
+  }
+   */
   ctx.save()
   ctx.fillStyle = 'black'
   ctx.textBaseline = 'top'
@@ -244,8 +370,8 @@ function drawOutput(output: Output, ctx: CanvasRenderingContext2D) {
 function paint(e: MouseEvent) {
   if (running) return;
   const { offsetX: x, offsetY: y } = e;
-  const tx = Math.floor(x / size);
-  const ty = Math.floor(y / size);
+  const tx = Math.floor(x / tileW);
+  const ty = Math.floor(y / tileH);
   if (tx >= 0 && tx < bounds.width && ty >= 0 && ty < bounds.height && !forbidden.has(`${tx},${ty}`)) {
     sim.set(tx, ty, brush);
   }
@@ -333,8 +459,8 @@ type PuzzleLetterDef =
 type PuzzleDef = {
   name: string;
   dimensions: [number, number];
-  grid: [string];
-  defns: [[string, PuzzleLetterDef]];
+  grid: Array<string>;
+  defns: Array<[string, PuzzleLetterDef]>;
 };
 
 function loadPuzzle(puzzleDef: PuzzleDef) {

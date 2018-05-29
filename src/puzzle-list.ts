@@ -63,7 +63,7 @@ puzzleList.innerHTML = `<ul>${puzzles.map((p: any, i: number) => `<li data-id=${
       }
     })
     puzzleFrame.send('puzzle', JSON.stringify(puzzles[puzzleId]))
-    //puzzleFrame.openDevTools()
+    puzzleFrame.openDevTools()
   })
   puzzleFrame.addEventListener('close', () => {
     puzzleFrame.remove()
