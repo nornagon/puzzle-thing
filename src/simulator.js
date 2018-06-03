@@ -24,7 +24,6 @@
 // This implementation welds shuttles which touch - I declare this to be (in
 // general) undefined behaviour, because its inconvenient behaviour in a
 // compiled implementation.
-debugger;
 var Simulator, cardinal_dirs, fill, parseXY, sign;
 
 cardinal_dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];

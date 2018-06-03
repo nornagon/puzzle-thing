@@ -52,41 +52,17 @@ const puzzles = PuzzleParser.puzzles.tryParse(puzzleText)
 puzzleList.innerHTML = `<ul>${puzzles.map((p: any, i: number) => `<li data-id=${i}>${p.name}</li>`).join('')}</ul>`
 ;(puzzleList.children[0] as HTMLElement).addEventListener('click', (e: MouseEvent) => {
   const puzzleId = Number((e.target as HTMLElement).dataset.id)
-  const puzzleFrame = document.createElement('webview')
-  puzzleFrame.setAttribute('nodeIntegration', 'true')
+  const puzzleFrame = document.createElement('iframe')
   puzzleFrame.src = 'index.html'
   puzzleFrame.style.opacity = '0.0001'
-  puzzleFrame.addEventListener('did-finish-load', () => {
-    puzzleFrame.addEventListener('ipc-message', ev => {
-      if (ev.channel === 'puzzle-loaded') {
-        puzzleFrame.style.opacity = null
-      }
-    })
-    puzzleFrame.send('puzzle', JSON.stringify(puzzles[puzzleId]))
-    puzzleFrame.openDevTools()
-  })
-  puzzleFrame.addEventListener('close', () => {
-    puzzleFrame.remove()
-    document.body.classList.remove('puzzling')
-  })
-  puzzleFrame.addEventListener('console-message', e => {
-    console.log("[puzzleFrame]", e.message)
+  puzzleFrame.addEventListener('load', () => {
+    puzzleFrame.contentWindow.close = () => {
+      puzzleFrame.remove()
+      document.body.classList.remove('puzzling')
+    }
+    puzzleFrame.contentWindow.loadPuzzle(puzzles[puzzleId])
+    puzzleFrame.style.opacity = null
   })
   document.body.appendChild(puzzleFrame)
   document.body.classList.add('puzzling')
 })
-
-// ok, so i want to use iframes to isolate js contexts, so that i can be messy
-// in writing the core game code and then just wrap that all in a js context
-// that i can tear down at the end of the puzzle and all that junk goes away.
-// but electron won't let me require() in an iframe. so i have a couple
-// options:
-// 1 use <webview> instead of iframe. it runs out of process, so it's slow and
-//   can't do synchronous scripting, but it has all the isolation properties i
-//   want and can call require().
-//   - this could eject into (2) if i get un-lazy pretty easily. set up webpack
-//     and shit, swap webview for iframe, rip out the electron postmessage crap
-// 2 make it more webby, and stop calling require(). you don't really need it.
-//   - webpaaaack y u so confusing
-// 3 clean yo shit up, and run it all in the same frame.
-//   - nah man

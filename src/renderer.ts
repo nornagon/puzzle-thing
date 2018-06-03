@@ -2,14 +2,6 @@
 // be executed in the renderer process for that window.
 // All of the Node.js APIs are available in this process.
 import * as Simulator from "./simulator";
-import {ipcRenderer} from "electron";
-ipcRenderer.on('puzzle', (e: any, msg: string) => {
-  const puzzle = JSON.parse(msg)
-  console.log(puzzle)
-  loadPuzzle(puzzle)
-  draw()
-  ipcRenderer.sendToHost('puzzle-loaded')
-})
 
 const spriteCache: { [name: string]: HTMLImageElement } = {}
 const sprite = (name: string) => {
@@ -156,20 +148,25 @@ const draw = () => {
     let dir = {dx: 1, dy: 0}
     const path = [p]
     do {
-      // TODO: this is wrong when traveling left
-      const nextRight = sim.grid[`${p.tx+dir.dx},${p.ty+dir.dy}`] || 'solid'
-      const nextLeft = sim.grid[`${p.tx+dir.dx+dir.dy},${p.ty+dir.dy-dir.dx}`] || 'solid' // TODO: get a bit of paper and check this
-      p = {tx: p.tx + dir.dx, ty: p.ty + dir.dy};
-      path.push(p)
+      // To find what's to the "right" and "left" of our direction, we go
+      // halfway into the cell and round down.
+      // the "right" is floor(pos + (dir + perp(dir))/2),
+      // the "left" is floor(pos + (dir - perp(dir))/2).
+      const [nrx, nry] = [Math.floor(p.tx + (dir.dx - dir.dy)/2), Math.floor(p.ty + (dir.dy + dir.dx)/2)]
+      const [nlx, nly] = [Math.floor(p.tx + (dir.dx + dir.dy)/2), Math.floor(p.ty + (dir.dy - dir.dx)/2)]
+      const nextRight = sim.grid[`${nrx},${nry}`] || 'solid'
+      const nextLeft = sim.grid[`${nlx},${nly}`] || 'solid'
       if (nextLeft !== 'solid' || nextRight === 'solid') {
         if (nextRight === 'solid') {
           // turn right
           dir = {dx: -dir.dy, dy: dir.dx}
         } else {
           // turn left
-          dir = {dx: dir.dy, dy: -dir.dx} // TODO: lol idk some math shit
+          dir = {dx: dir.dy, dy: -dir.dx}
         }
       }
+      p = {tx: p.tx + dir.dx, ty: p.ty + dir.dy};
+      path.push(p)
     } while (!(p.tx === tx && p.ty === ty))
     return path
   }
@@ -180,7 +177,17 @@ const draw = () => {
   ctx.beginPath()
   ctx.moveTo(check[0].tx * tileW, check[0].ty * tileH)
   check.slice(1).forEach(({tx, ty}) => ctx.lineTo(tx * tileW, ty * tileH))
-  ctx.stroke()
+  //ctx.stroke()
+  ctx.clip()
+  ctx.fillStyle = "black"
+  ctx.shadowColor = "black"
+  ctx.shadowBlur = 10
+  ctx.moveTo(0,0)
+  ctx.lineTo(0,ctx.canvas.height)
+  ctx.lineTo(ctx.canvas.width, ctx.canvas.height)
+  ctx.lineTo(ctx.canvas.width, 0)
+  ctx.closePath()
+  ctx.fill("evenodd")
   ctx.restore()
 
   // bottom layer
@@ -463,6 +470,7 @@ type PuzzleDef = {
   defns: Array<[string, PuzzleLetterDef]>;
 };
 
+window.loadPuzzle = loadPuzzle
 function loadPuzzle(puzzleDef: PuzzleDef) {
   const grid: {[k: string]: string} = {};
   forbidden.clear();
@@ -508,4 +516,5 @@ function loadPuzzle(puzzleDef: PuzzleDef) {
   bounds.width = puzzleDef.dimensions[0]
   bounds.height = puzzleDef.dimensions[1]
   sim.setGrid(grid);
+  draw()
 }
